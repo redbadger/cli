@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"io/ioutil"
 
 	"github.com/convox/cli/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws"
 	"github.com/convox/cli/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/awserr"
@@ -43,6 +44,12 @@ func init() {
 				Name: "instance-type",
 				Value: "t2.small",
 				Usage: "type of EC2 instances",
+			},
+			cli.StringFlag{
+				Name: "region",
+				Value: "us-east-1",
+				Usage: "aws region to install in",
+				EnvVar: "AWS_REGION",
 			},
 		},
 	})
@@ -90,7 +97,7 @@ func cmdInstall(c *cli.Context) {
 	fmt.Println("install process and then delete them once the installer has completed.")
 	fmt.Println("")
 	fmt.Println("To generate a new set of AWS credentials go to:")
-	fmt.Println("https://console.aws.amazon.com/iam/home?region=us-east-1#security_credential")
+	fmt.Println("https://console.aws.amazon.com/iam/home#security_credential")
 	fmt.Println("")
 
 	distinctId, err := currentId()
@@ -157,9 +164,15 @@ func cmdInstall(c *cli.Context) {
 	password := randomString(30)
 
 	CloudFormation := cloudformation.New(&aws.Config{
-		Region:      "us-east-1",
+		Region:      c.String("region"),
 		Credentials: credentials.NewStaticCredentials(access, secret, ""),
 	})
+
+	formationJson, err := ioutil.ReadFile("formation.json")
+	if err != nil {
+		stdcli.Error(err)
+		return
+	}
 
 	res, err := CloudFormation.CreateStack(&cloudformation.CreateStackInput{
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -174,7 +187,7 @@ func cmdInstall(c *cli.Context) {
 			&cloudformation.Parameter{ParameterKey: aws.String("Version"), ParameterValue: aws.String(version)},
 		},
 		StackName:   aws.String(stackName),
-		TemplateURL: aws.String(FormationUrl),
+		TemplateBody: aws.String(string(formationJson)),
 	})
 
 	if err != nil {
@@ -232,7 +245,7 @@ func cmdUninstall(c *cli.Context) {
 	fmt.Println("uninstall process and then delete them once the uninstaller has completed.")
 	fmt.Println("")
 	fmt.Println("To generate a new set of AWS credentials go to:")
-	fmt.Println("https://console.aws.amazon.com/iam/home?region=us-east-1#security_credential")
+	fmt.Println("https://console.aws.amazon.com/iam/home#security_credential")
 	fmt.Println("")
 
 	reader := bufio.NewReader(os.Stdin)
@@ -276,7 +289,7 @@ func cmdUninstall(c *cli.Context) {
 	secret = strings.TrimSpace(secret)
 
 	CloudFormation := cloudformation.New(&aws.Config{
-		Region:      "us-east-1",
+		Region:      c.String("region"),
 		Credentials: credentials.NewStaticCredentials(access, secret, ""),
 	})
 
@@ -313,7 +326,7 @@ func cmdUninstall(c *cli.Context) {
 	fmt.Printf("Cleaning up registry...\n")
 
 	S3 := s3.New(&aws.Config{
-		Region:      "us-east-1",
+		Region:      c.String("region"),
 		Credentials: credentials.NewStaticCredentials(access, secret, ""),
 	})
 
